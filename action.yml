@@ -1,0 +1,57 @@
+name: 'deploy ecs task'
+description: 'deploy the task to ecs cluster, note that the service name should be identical to the repository name'
+inputs:
+  ecs-task-definition:
+    description: >
+      The definition of the task, which will be deployed to ecs cluster
+    required: true
+  ecs-cluster:
+    description: >
+      The name of the ecs cluster, to which the task will be deployed
+    required: true
+  config-path:
+    description: >-
+      path to the config file in json format
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: load variables
+      id: load-vars
+      uses: myriad-actions/load-variables@v1
+      if: ${{ inputs.configure-aws == 'true' }}
+      with:
+        config-path: ${{ inputs.config-path }}
+    - name: Configure AWS credentials 
+      uses: aws-actions/configure-aws-credentials@v1
+      if: ${{ inputs.configure-aws == 'true' }}
+      with:
+        role-to-assume: ${{ fromJson(steps.load-vars.outputs.vars).role-to-assume }}
+        aws-region: ${{ fromJson(steps.load-vars.outputs.vars).aws-region }}
+    - run: env $(cat ${{ inputs.env-path }} | grep -v "#" | xargs) /opt/tools/ci-tools/${{ inputs.script }}
+      shell: bash
+      
+    steps:
+      - uses: actions/checkout@v2
+      - name: load variables
+        id: load-vars
+        uses: myriad-actions/load-variables@v1
+        with:
+          config-path: ${{ inputs.config-path }}
+      - name: Configure AWS credentials 
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ fromJson(steps.load-vars.outputs.vars).role-to-assume }}
+          aws-region: ${{ fromJson(steps.load-vars.outputs.vars).aws-region }}
+      - name: Download task definition
+        run: 
+          aws ecs describe-task-definition --task-definition ${{ inputs.ecs-task-definition }} --query taskDefinition > ecs-task-def.json
+      - name: Deploy Amazon ECS task by definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ecs-task-def.json
+          service: ${{ github.event.repository.name }}
+          cluster: ${{ inputs.ecs-cluster }}
+          wait-for-service-stability: true
+          force-new-deployment: true
