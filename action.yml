@@ -31,6 +31,7 @@ runs:
     - name: Download task definition
       run: 
         aws ecs describe-task-definition --task-definition ${{ inputs.task-definition }} --query taskDefinition > ecs-task-def.json
+      shell: bash
     - name: Deploy Amazon ECS task by definition
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
       with:
